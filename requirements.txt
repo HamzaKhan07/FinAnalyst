@@ -1,7 +1,7 @@
 altair==5.2.0
 beautifulsoup4==4.12.2
 googlesearch_python==1.2.3
-langchain==0.0.354
+langchain==0.0.340
 nsepython==2.8
 numpy==1.23.4
 pandas==1.5.2
