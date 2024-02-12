@@ -35,7 +35,7 @@ def get_data(ticker_name):
     s = soup.find('table', class_='tb10Table col l12 ft785Table')
     df = pd.read_html(str(s))[0]
 
-    price_data = nsetools_get_quote("TATAMOTORS")
+    price_data = nsetools_get_quote(ticker_name)
 
     # Extracting specific rows based on their indices
     roe = df.loc[1, 1]
