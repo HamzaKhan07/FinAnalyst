@@ -8,10 +8,11 @@ import pandas as pd
 import altair as alt
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import GooglePalmEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain.vectorstores import FAISS
-from langchain.llms import GooglePalm
-from langchain.chains import RetrievalQA
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain.chains.question_answering import load_qa_chain
+from langchain.prompts import PromptTemplate
 import prompts as pr
 
 # page
@@ -128,11 +129,11 @@ def start():
 
                 # create embeddings
                 # divide text into chunks
-                text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200, length_function=len)
+                text_splitter = RecursiveCharacterTextSplitter(chunk_size=10000, chunk_overlap=1000)
                 chunks = text_splitter.split_text(text=content)
 
                 # create embeddings
-                embeddings = GooglePalmEmbeddings()
+                embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
                 # store embeddings
                 vectordb = FAISS.from_texts(chunks, embedding=embeddings)
@@ -252,27 +253,39 @@ def start():
 
 def get_insights(vectordb):
     if 'chain' not in st.session_state:
-        # load embeddings
-        retriever = vectordb.as_retriever(score_threshold=0.7)
+        # prompt template
+        prompt_template = """
+                    Answer the question as detailed as possible from the provided context, make sure to provide all the details.\n\n
+                    Context:\n {context}?\n
+                    Question: \n{question}\n
+
+                    Answer:
+                    """
         # question answer chain
-        llm = GooglePalm(temperature=0.3)
-        chain = RetrievalQA.from_chain_type(llm=llm, chain_type='stuff', retriever=retriever,
-                                            return_source_documents=True)
+        model = ChatGoogleGenerativeAI(model="gemini-pro")  # models/text-bison-001
+        prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
+        chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
         st.session_state.chain = chain
 
     if 'response' not in st.session_state:
         query = pr.prompt_insights
+        docs = st.session_state.vectordb.similarity_search(query)
 
         # response
-        response = st.session_state.chain(query)
+        response = st.session_state.chain(
+            {"input_documents": docs, "question": query}
+            , return_only_outputs=True)
+
+        # insights
+        # print(docs)
 
         # insights
         st.balloons()
         st.subheader("💡 Key Insights from Annual Report")
-        st.info(response['result'])
+        st.info(response["output_text"])
 
         st.write('\n\n')
-        st.session_state.response = response['result']
+        st.session_state.response = response['output_text']
     else:
         st.subheader("💡 Key Insights from Annual Report")
         st.info(st.session_state.response)
@@ -295,11 +308,16 @@ def handle_chat(prompt):
 
     # add loading
     with st.spinner('Loading...'):
-        query = pr.prompt_chat + prompt
+        query = prompt
         try:
-            response = st.session_state.chain(query)
-            print('Response Chat: ', response['result'])
-            st.session_state.chat_result = response['result']
+            docs = st.session_state.vectordb.similarity_search(query)
+
+            response = st.session_state.chain(
+                {"input_documents": docs, "question": query}
+                , return_only_outputs=True)
+
+            print('Response Chat: ', response['output_text'])
+            st.session_state.chat_result = response['output_text']
         except:
             st.session_state.chat_result = "Sorry, I'm not able to assist you with that"
 
