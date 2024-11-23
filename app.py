@@ -89,9 +89,6 @@ def start():
             # delete previous data
             del st.session_state.content
             del st.session_state.ratios
-            del st.session_state.df_cashflow
-            del st.session_state.df_pl
-            del st.session_state.df_bs
             del st.session_state.messages
             del st.session_state.selected_company
             # clear session state variables
