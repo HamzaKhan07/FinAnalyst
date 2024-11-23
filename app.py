@@ -21,22 +21,11 @@ st.set_page_config(
     page_icon="💸",
 )
 
-# hide links
-st.markdown(
-    """
-    <style>
-    .css-1jc7ptx, .e1ewe7hr3, .viewerBadge_container__1QSob,
-    .styles_viewerBadge__1yB5_, .viewerBadge_link__1S137,
-    .viewerBadge_text__1JaDK {
-        display: none;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
 # load api key
-load_dotenv()
+# load_dotenv()
+
+api_key = st.secrets["api_key"]
 
 # Initialize chat history
 if "messages" not in st.session_state:
@@ -120,12 +109,7 @@ def start():
 
         with st.spinner("Analyzing Annual Report..."):
             if 'content' not in st.session_state:
-                content, ratios, df_cashflow, df_pl, df_bs = get_data(selected_company)
-                st.session_state.content = content
-                st.session_state.ratios = ratios
-                st.session_state.df_cashflow = df_cashflow
-                st.session_state.df_pl = df_pl
-                st.session_state.df_bs = df_bs
+                content, ratios = get_data(selected_company)
 
                 # create embeddings
                 # divide text into chunks
@@ -133,7 +117,7 @@ def start():
                 chunks = text_splitter.split_text(text=content)
 
                 # create embeddings
-                embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+                embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001", google_api_key=api_key)
 
                 # store embeddings
                 vectordb = FAISS.from_texts(chunks, embedding=embeddings)
@@ -141,11 +125,7 @@ def start():
                 st.session_state.vectordb = vectordb
 
             else:
-                content = st.session_state.content
-                ratios = st.session_state.ratios
-                df_cashflow = st.session_state.df_cashflow
-                df_pl = st.session_state.df_pl
-                df_bs = st.session_state.df_bs
+                content, ratios = st.session_state.content, st.session_state.ratios
 
                 vectordb = st.session_state.vectordb
 
@@ -157,96 +137,17 @@ def start():
         # key ratios
         with st.sidebar:
             st.subheader(selected_company)
-            st.title(f"₹ {ratios['price']}")
-            st.caption("NSE")
+            st.title(f"₹ {ratios['current_price']}")
+            st.write(ratios['industry'])
+            st.write('Rating: ', ratios['recommendation_key'])
 
             st.subheader("📊 Key Ratios")
             st.info(f"""
-            1. ROE: {ratios['roe']}
-            2. P/E Ratio(TTM): {ratios['pe']}
-            3. EPS(TTM): {ratios['eps']}
-            4. P/B Ratio: {ratios['pb']}
-            5. Dividend Yield: {ratios['div_yield']}
-            6. Debt to Equity: {ratios['d_to_e']}
-            """)
-
-        # Financials
-        st.write("")
-        st.subheader("💹 Financial Statements")
-        # Profit and Loss
-        st.subheader("Profit and Loss")
-        # df_pl.pop(df_pl.columns[-1])
-        st.dataframe(df_pl, use_container_width=True)
-        # chart data
-        chart = pd.DataFrame({
-            "Amount Type": ["Total Revenue"] * 5 + ["Total Expense"] * 5,
-            "Amount": list(df_pl.iloc[5, 1:6].astype(float).values) + list(df_pl.iloc[14, 1:6].astype(float).values),
-            "Month": list(df_pl.columns[1:]) + list(df_pl.columns[1:])
-        })
-        bar_chart_pl = alt.Chart(chart).mark_bar().encode(
-            x=alt.X("Month", sort=None),
-            y="Amount",
-            color="Amount Type"
-        )
-        st.altair_chart(bar_chart_pl, use_container_width=True)
-
-        # profits chart data
-        st.subheader("Profit/Loss")
-        chart = pd.DataFrame({
-            "Profit/Loss": ["Total Profit/Loss"] * 5,
-            "Amount": list(df_pl.iloc[25, 1:6].astype(float).values),
-            "Month": list(df_pl.columns[1:])
-        })
-        profit_chart_pl = alt.Chart(chart).mark_bar().encode(
-            x=alt.X("Month", sort=None),
-            y="Amount",
-            color="Profit/Loss"
-        )
-        st.altair_chart(profit_chart_pl, use_container_width=True)
-
-        # Cash Flow
-        st.subheader("Cash Flow")
-        # df_cashflow.pop(df_cashflow.columns[-1])
-        st.dataframe(df_cashflow, use_container_width=True)
-        # chart data
-        chart = pd.DataFrame({
-            "Cash Type": ["Operating Activities"] * 5 + ["Investing Activities"] * 5 + ["Financing Activities"] * 5,
-            "Amount": list(df_cashflow.iloc[1, 1:6].astype(float).values) + list(df_cashflow.iloc[2, 1:6].astype(float).values) + list(df_cashflow.iloc[3, 1:6].astype(float).values),
-            "Month": list(df_cashflow.columns[1:]) + list(df_cashflow.columns[1:]) + list(df_cashflow.columns[1:])
-        })
-        bar_chart_cashflow = alt.Chart(chart).mark_bar().encode(
-            x=alt.X("Month", sort=None),
-            y="Amount",
-            color="Cash Type"
-        )
-        st.altair_chart(bar_chart_cashflow, use_container_width=True)
-
-        # Balance Sheet
-        st.subheader("Balance Sheet")
-        # df_bs.pop(df_bs.columns[-1])
-        st.dataframe(df_bs, use_container_width=True)
-        # Add assets and liabilities
-        total_non_current_assets = df_bs.iloc[25, 1:6].astype(float).values
-        total_current_assets = df_bs.iloc[32, 1:6].astype(float).values
-        total_assets = total_non_current_assets + total_current_assets
-
-        total_non_current_liabilities = df_bs.iloc[10, 1:6].astype(float).values
-        total_current_liabilities = df_bs.iloc[15, 1:6].astype(float).values
-        total_liabilities = total_non_current_liabilities + total_current_liabilities
-
-        # chart
-        chart = pd.DataFrame({
-            "Amount Type": ["Total Assets"] * 5 + ["Total Liabilities"] * 5,
-            "Amount": list(total_assets) + list(total_liabilities),
-            "Month": list(df_bs.columns[1:]) + list(df_bs.columns[1:])
-        })
-        bar_chart_bs = alt.Chart(chart).mark_bar().encode(
-            x=alt.X("Month", sort=None),
-            y="Amount",
-            color="Amount Type"
-        )
-        st.altair_chart(bar_chart_bs, use_container_width=True)
-        st.write("")
+                        1. ROE: {ratios['roe']}
+                        2. Forward PE: {ratios['forward_pe']}
+                        3. Debt to Equity: {ratios['db_to_eq']}
+                        4. P/B Ratio: {ratios['pb']}
+                        """)
 
         return vectordb
 
@@ -262,7 +163,7 @@ def get_insights(vectordb):
                     Answer:
                     """
         # question answer chain
-        model = ChatGoogleGenerativeAI(model="gemini-pro")  # models/text-bison-001
+        model = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=api_key)  # models/text-bison-001 gemini-pro
         prompt = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
         chain = load_qa_chain(model, chain_type="stuff", prompt=prompt)
         st.session_state.chain = chain
